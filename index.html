@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта конкурентного ландшафта GeOnline</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #ecf0f1;
+            border-radius: 10px;
+            position: relative;
+            background: #fafafa;
+        }
+        
+        .competitor-circle {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .competitor-circle:hover {
+            stroke-width: 3px;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.3));
+        }
+        
+        .axis {
+            font-size: 12px;
+        }
+        
+        .axis-label {
+            font-size: 14px;
+            font-weight: bold;
+            fill: #2c3e50;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            font-size: 12px;
+            max-width: 250px;
+            z-index: 1000;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 15px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .control-button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .control-button:hover {
+            background: #2980b9;
+        }
+        
+        .control-button.active {
+            background: #e74c3c;
+        }
+    </style>
+<style>
+
+/* --- Embed helpers for iframe/Gamma --- */
+html, body { height: 100%; margin: 0; }
+#app, #root, #viz-container { min-height: 680px; }
+:root { --embed-min-height: 680px; }
+.embed-wrap { width: 100%; min-height: var(--embed-min-height); box-sizing: border-box; padding: 0; margin: 0; }
+@media (max-width: 768px) { :root { --embed-min-height: 560px; } }
+
+</style>
+</head>
+<body>
+    <div class="container">
+        <h1>Карта конкурентного ландшафта GeOnline</h1>
+        
+        <div class="controls">
+            <button class="control-button active" onclick="showView('audience-specialization')">Аудитория × Специализация</button>
+            <button class="control-button" onclick="showView('price-quality')">Цена × Качество</button>
+            <button class="control-button" onclick="showView('reach-engagement')">Охват × Вовлеченность</button>
+        </div>
+        
+        <div class="chart-container" id="chart"></div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e74c3c;"></div>
+                <span>Прямые конкуренты</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f39c12;"></div>
+                <span>Косвенные конкуренты</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #9b59b6;"></div>
+                <span>Неожиданные конкуренты</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #27ae60;"></div>
+                <span>GeOnline</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        const competitorData = {
+            'audience-specialization': [
+                {name: 'JUZ40', x: 90, y: 30, category: 'direct', followers: '218K', price: '35-75K/мес', quality: 5, description: 'Лидер рынка, 8 из 13 рекордов, подписочная модель'},
+                {name: 'Edukey', x: 85, y: 25, category: 'direct', followers: '206K', price: '206K единовр.', quality: 3, description: '30K+ учеников, массовые жалобы на качество'},
+                {name: 'Sabaq Online', x: 70, y: 20, category: 'direct', followers: '29K', price: '540K единовр.', quality: 4, description: 'Старейший игрок, "объясняем сложное простым языком"'},
+                {name: 'Arystan Online', x: 65, y: 40, category: 'direct', followers: '131K', price: '160-500K', quality: 4, description: '90% на гранте, средний и выше среднего достаток'},
+                {name: 'Eduser', x: 60, y: 80, category: 'direct', followers: '31K', price: '349K', quality: 3, description: '400 учеников, 1 результат 140 баллов'},
+                {name: 'Тарих мектебі', x: 40, y: 90, category: 'indirect', followers: '58K', price: '160-195K', quality: 4, description: 'Специализация по истории, 3 ученика 140/140'},
+                {name: 'Репетиторы', x: 30, y: 95, category: 'indirect', followers: 'N/A', price: 'Разная', quality: 3, description: 'Индивидуальные занятия 1:1'},
+                {name: 'Зерделі офлайн', x: 20, y: 60, category: 'indirect', followers: 'N/A', price: 'N/A', quality: 4, description: 'Офлайн центры подготовки'},
+                {name: 'NFactorial', x: 10, y: 20, category: 'unexpected', followers: 'N/A', price: 'N/A', quality: 4, description: 'IT-платформа с AI, сильная техническая база'},
+                {name: 'GeOnline', x: 45, y: 85, category: 'us', followers: 'Растем', price: '200K/4мес', quality: 5, description: '10 лет экспертности в географии, каждый 3-й ученик 40+'}
+            ],
+            'price-quality': [
+                {name: 'JUZ40', x: 70, y: 90, category: 'direct', followers: '218K', price: '35-75K/мес', quality: 5},
+                {name: 'Edukey', x: 60, y: 30, category: 'direct', followers: '206K', price: '206K единовр.', quality: 3},
+                {name: 'Sabaq Online', x: 90, y: 60, category: 'direct', followers: '29K', price: '540K единовр.', quality: 4},
+                {name: 'Arystan Online', x: 75, y: 70, category: 'direct', followers: '131K', price: '160-500K', quality: 4},
+                {name: 'Eduser', x: 80, y: 40, category: 'direct', followers: '31K', price: '349K', quality: 3},
+                {name: 'GeOnline', x: 40, y: 95, category: 'us', followers: 'Растем', price: '200K/4мес', quality: 5}
+            ],
+            'reach-engagement': [
+                {name: 'JUZ40', x: 95, y: 90, category: 'direct', followers: '218K', engagement: 'Высокая'},
+                {name: 'Edukey', x: 90, y: 60, category: 'direct', followers: '206K', engagement: 'Средняя'},
+                {name: 'Arystan Online', x: 70, y: 70, category: 'direct', followers: '131K', engagement: 'Средняя'},
+                {name: 'Eduser', x: 30, y: 80, category: 'direct', followers: '31K', engagement: 'Высокая'},
+                {name: 'Sabaq Online', x: 25, y: 50, category: 'direct', followers: '29K', engagement: 'Низкая'},
+                {name: 'GeOnline', x: 20, y: 95, category: 'us', followers: 'Растем', engagement: 'Очень высокая'}
+            ]
+        };
+
+        let currentView = 'audience-specialization';
+        let svg, tooltip;
+
+        const colorMap = {
+            'direct': '#e74c3c',
+            'indirect': '#f39c12', 
+            'unexpected': '#9b59b6',
+            'us': '#27ae60'
+        };
+
+        function initChart() {
+            const container = d3.select('#chart');
+            const containerNode = container.node();
+            const width = containerNode.clientWidth - 40;
+            const height = containerNode.clientHeight - 40;
+            
+            svg = container.append('svg')
+                .attr('width', width)
+                .attr('height', height);
+                
+            tooltip = d3.select('#tooltip');
+            
+            updateChart();
+        }
+
+        function updateChart() {
+            svg.selectAll('*').remove();
+            
+            const container = d3.select('#chart');
+            const containerNode = container.node();
+            const width = containerNode.clientWidth - 40;
+            const height = containerNode.clientHeight - 40;
+            
+            const margin = {top: 40, right: 40, bottom: 60, left: 60};
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+            
+            const data = competitorData[currentView];
+            
+            // Создаем шкалы
+            const xScale = d3.scaleLinear()
+                .domain([0, 100])
+                .range([0, innerWidth]);
+                
+            const yScale = d3.scaleLinear()
+                .domain([0, 100])
+                .range([innerHeight, 0]);
+                
+            const radiusScale = d3.scaleLinear()
+                .domain([0, d3.max(data, d => parseInt(d.followers?.replace('K', '') || '10'))])
+                .range([8, 25]);
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+            
+            // Оси
+            const xAxis = d3.axisBottom(xScale).tickFormat(d => d + '%');
+            const yAxis = d3.axisLeft(yScale).tickFormat(d => d + '%');
+            
+            g.append('g')
+                .attr('class', 'axis')
+                .attr('transform', `translate(0,${innerHeight})`)
+                .call(xAxis);
+                
+            g.append('g')
+                .attr('class', 'axis')
+                .call(yAxis);
+            
+            // Подписи осей
+            const labels = getAxisLabels(currentView);
+            
+            g.append('text')
+                .attr('class', 'axis-label')
+                .attr('x', innerWidth / 2)
+                .attr('y', innerHeight + 50)
+                .attr('text-anchor', 'middle')
+                .text(labels.x);
+                
+            g.append('text')
+                .attr('class', 'axis-label')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -innerHeight / 2)
+                .attr('y', -40)
+                .attr('text-anchor', 'middle')
+                .text(labels.y);
+            
+            // Конкуренты
+            const competitors = g.selectAll('.competitor-circle')
+                .data(data)
+                .enter().append('circle')
+                .attr('class', 'competitor-circle')
+                .attr('cx', d => xScale(d.x))
+                .attr('cy', d => yScale(d.y))
+                .attr('r', d => radiusScale(parseInt(d.followers?.replace('K', '') || '10')))
+                .attr('fill', d => colorMap[d.category])
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2)
+                .attr('opacity', 0.8);
+            
+            // Подписи
+            g.selectAll('.competitor-label')
+                .data(data)
+                .enter().append('text')
+                .attr('class', 'competitor-label')
+                .attr('x', d => xScale(d.x))
+                .attr('y', d => yScale(d.y) - radiusScale(parseInt(d.followers?.replace('K', '') || '10')) - 5)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '12px')
+                .attr('font-weight', 'bold')
+                .attr('fill', '#2c3e50')
+                .text(d => d.name);
+            
+            // События
+            competitors
+                .on('mouseover', function(event, d) {
+                    tooltip
+                        .style('opacity', 1)
+                        .html(`
+                            <strong>${d.name}</strong><br>
+                            Подписчики: ${d.followers || 'N/A'}<br>
+                            Цена: ${d.price || 'N/A'}<br>
+                            ${d.description || ''}
+                        `)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px');
+                })
+                .on('mouseout', function() {
+                    tooltip.style('opacity', 0);
+                })
+                .on('mousemove', function(event) {
+                    tooltip
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px');
+                });
+        }
+
+        function getAxisLabels(view) {
+            const labels = {
+                'audience-specialization': {x: 'Размер аудитории', y: 'Специализация'},
+                'price-quality': {x: 'Цена (относительная)', y: 'Качество сервиса'},
+                'reach-engagement': {x: 'Охват (подписчики)', y: 'Вовлеченность'}
+            };
+            return labels[view];
+        }
+
+        function showView(view) {
+            currentView = view;
+            
+            // Обновляем кнопки
+            document.querySelectorAll('.control-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            updateChart();
+        }
+
+        // Инициализация при загрузке
+        window.addEventListener('load', initChart);
+        window.addEventListener('resize', updateChart);
+    </script>
+</body>
+</html>
